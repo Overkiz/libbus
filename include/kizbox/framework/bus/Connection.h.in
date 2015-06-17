@@ -1,0 +1,374 @@
+/*
+ * Connection.h
+ *
+ *      Copyright (C) 2015 Overkiz SA.
+ */
+
+#ifndef BUSCONNECTION_H_
+#define BUSCONNECTION_H_
+
+#include <map>
+#include <set>
+#include <queue>
+
+#include <kizbox/framework/core/Log.h>
+#include <kizbox/framework/bus/Message.h>
+#include <kizbox/framework/bus/Type.h>
+#include <kizbox/framework/bus/Object.h>
+#include <kizbox/framework/core/Watcher.h>
+#include <kizbox/framework/core/Timer.h>
+#include <kizbox/framework/core/Event.h>
+#include <kizbox/framework/core/Shared.h>
+#include <kizbox/framework/core/Exception.h>
+#include <kizbox/framework/core/Task.h>
+#include <kizbox/framework/core/Coroutine.h>
+
+namespace Overkiz
+{
+  namespace Bus
+  {
+    /**
+     * Class representing a Bus connection.
+     * You cannot instantiate this class.
+     * You must use the getter instead. It returns a Shared::Pointer to
+     * a connection.
+     *
+     * Each thread has its own connection.
+     */
+    class Connection : private Event
+    {
+    public:
+      /**
+       *
+       */
+      class BusErrorException : public Overkiz::Exception
+      {
+      public:
+        /**
+         *
+         */
+        virtual ~BusErrorException()
+        {
+        }
+
+        /**
+         *
+         * @return
+         */
+        const char * getId() const
+        {
+          return "com.kizbox.Framework.Bus.Connection.BusErrorException";
+        }
+
+      };
+
+      class LackOfMemoryException : public Overkiz::Exception
+      {
+      public:
+        /**
+         *
+         */
+        virtual ~LackOfMemoryException()
+        {
+        }
+
+        /**
+         *
+         * @return
+         */
+        const char * getId() const
+        {
+          return "com.kizbox.Framework.Bus.Connection.LackOfMemoryException";
+        }
+
+      };
+
+      class EmptyException : public Overkiz::Exception
+      {
+      public:
+        /**
+         *
+         */
+        virtual ~EmptyException()
+        {
+        }
+
+        /**
+         *
+         * @return
+         */
+        const char * getId() const
+        {
+          return "com.kizbox.Framework.Bus.Connection.EmptyException";
+        }
+
+      };
+
+      class AlreadySetException : public Overkiz::Exception
+      {
+      public:
+
+        virtual ~AlreadySetException()
+        {
+        }
+
+        const char * getId() const
+        {
+          return "com.kizbox.Framework.Bus.Connection.AlreadySetException";
+        }
+
+      };
+
+      /**
+       * Exception thrown by the bind method when the requested name is already used.
+       */
+      class RequestNameException : public Overkiz::Exception
+      {
+      public:
+
+        RequestNameException(const std::string & hostname) :
+          hostname(hostname)
+        {
+        }
+
+        virtual ~RequestNameException()
+        {
+        }
+
+        const std::string & getHostname() const
+        {
+          return hostname;
+        }
+
+        const char * getId() const
+        {
+          return "com.kizbox.Framework.Bus.Connection.RequestNameFailure";
+        }
+
+      protected:
+
+        std::string hostname;
+
+      };
+
+      /**
+       * Exception thrown by the binf function when a filter cannot by configured.
+       * Filters are used to filter specific messages from the bus (for example,
+       * only accept bus signal addressed to a registered proxy object).
+       */
+      class AddFilterException : public Overkiz::Exception
+      {
+      public:
+
+        virtual ~AddFilterException()
+        {
+        }
+
+        const char * getId() const
+        {
+          return "com.kizbox.Framework.Bus.Connection.AddFilterFailure";
+        }
+
+      };
+
+      /**
+       * Bind a name to the connection.
+       * You can bind multiple names to a connection.
+       *
+       * @param hostname : the name to bind.
+       *
+       * @return result of the bind.
+       */
+      bool bind(const std::string& hostname, bool forceReplace = false);
+
+      /**
+       * Unbind a name from a connection.
+       *
+       * @param hostname : the name to unbind.
+       *
+       * @return result of the bind.
+       */
+      bool unbind(const std::string& hostname);
+
+      /**
+       * Send a method call message.
+       *
+       * @param method : the method call message to send.
+       * @param timeout : the timeout before considering a method has failed.
+       * @return a method return message.
+       */
+      Message::Method::Return send(Message::Method::Call& method);
+
+      /**
+       * Send an asynchronous method call message.
+       *
+       * @param method : the method call message to send.
+       * @param timeout : the timeout before considering a method has failed.
+       * @return a method return message.
+       */
+      uint32_t send(Message::Method::Call& method, const Shared::Pointer< Object::ReturnHandler > & handler);
+
+      /**
+       * Send a method return message.
+       *
+       * @param method : the method return message to send.
+       */
+      void send(Message::Method::Return& method) const;
+
+      /**
+       * Send a signal message.
+       *
+       * @param signal : the signal message to send.
+       */
+      void send(Message::Signal& signal) const;
+
+      /**
+       * Get connection unique name.
+       * A unique has the given form : ':X.Y'
+       *
+       * @return
+       */
+      const char *getName() const;
+
+      /**
+       * Get the connection associated to the current.
+       * If the current thread does not have any connection, a new one
+       * is created.
+       *
+       * @return : the current thread's connection.
+       */
+      static Shared::Pointer< Connection >& get(bool system = @SYSTEM_BUS@);
+
+      /**
+       * Log stuff.
+       *
+       * @return
+       */
+      void log(const Overkiz::Log::Priority priority, const char * what, ...) const;
+
+      /**
+       * Set logger object
+       *
+       * @return
+       */
+      void setLogger(Overkiz::Log::Logger * logger);
+
+    private:
+
+      class BusWatcher : public Watcher
+      {
+      public:
+        BusWatcher(DBusWatch *watch);
+        BusWatcher(DBusWatch *watch, int fd, uint32_t flags);
+        virtual ~BusWatcher();
+
+        void process(uint32_t events);
+
+      private:
+        static dbus_bool_t add(DBusWatch *watch, void *data);
+        static void toggled(DBusWatch *watch, void *data);
+        static void remove(DBusWatch *watch, void *data);
+        static void free(void *data);
+
+        DBusWatch *handler;
+
+        friend class Connection;
+      };
+
+      class TimeoutWatcher : public Timer::Monotonic
+      {
+      public:
+        TimeoutWatcher(DBusTimeout *watch);
+        TimeoutWatcher(DBusTimeout *watch, const Time::Monotonic& time);
+        virtual ~TimeoutWatcher();
+
+        void expired(const Time::Monotonic& time);
+
+      private:
+        static dbus_bool_t add(DBusTimeout *watch, void *data);
+        static void toggled(DBusTimeout *watch, void *data);
+        static void remove(DBusTimeout *watch, void *data);
+        static void free(void *data);
+
+        DBusTimeout *handler;
+
+        friend class Connection;
+
+      };
+
+      class ProxyCall
+      {
+      public:
+        virtual ~ProxyCall();
+
+        virtual void completed(DBusMessage * msg) = 0;
+      };
+
+      class SyncProxyCall : public ProxyCall
+      {
+      public:
+        SyncProxyCall();
+
+        virtual ~SyncProxyCall();
+
+        void completed(DBusMessage * msg);
+
+      private:
+        Message::Method::Return reply;
+        Shared::Pointer< Overkiz::Coroutine > coroutine;
+
+        friend class Connection;
+      };
+
+      class AsyncProxyCall : public ProxyCall
+      {
+      public:
+        AsyncProxyCall(uint32_t id, const Shared::Pointer< Object::ReturnHandler > & handler);
+
+        virtual ~AsyncProxyCall();
+
+        void completed(DBusMessage * msg);
+
+      private:
+        Message::Method::Return reply;
+        uint32_t id;
+        Shared::Pointer< Object::ReturnHandler > handler;
+
+        friend class Connection;
+      };
+
+      Connection(bool system);
+      virtual ~Connection();
+
+      void add(Object::Proxy *proxy);
+      void add(Object::Server *server);
+      void remove(Object::Proxy *proxy);
+      void remove(Object::Server *server);
+
+      std::map< std::string, std::list< Object::Proxy * > > proxies;
+      std::map< std::string, Object::Server * > servers;
+
+      DBusConnection *connection;
+      Overkiz::Log::Logger * logger;
+
+      static Thread::Key< Connection > sessionKey;
+      static Thread::Key< Connection > systemKey;
+
+      static DBusHandlerResult process(DBusConnection *connection, DBusMessage *message, void *data);
+
+      static void dispatch(DBusConnection *connection, DBusDispatchStatus status, void *data);
+      static void wakeup(void *data);
+      static void received(DBusPendingCall *pending, void *data);
+
+      void receive(uint64_t numberOfEvents);
+
+      static std::string buildMatchRule(const std::string & path, const std::string & host);
+
+      template< typename T > friend class Shared::Pointer;
+      friend class Object::Proxy;
+      friend class Object::Server;
+    };
+  }
+}
+
+#endif /* BUSCONNECTION_H_ */

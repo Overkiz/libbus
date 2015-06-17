@@ -1,0 +1,167 @@
+/*
+ * Object.h
+ *
+ *      Copyright (C) 2015 Overkiz SA.
+ */
+
+#ifndef BUSOBJECT_H_
+#define BUSOBJECT_H_
+
+#include <list>
+
+#include <kizbox/framework/bus/Message.h>
+#include <kizbox/framework/core/Task.h>
+#include <kizbox/framework/core/Timer.h>
+#include <kizbox/framework/core/Exception.h>
+
+namespace Overkiz
+{
+  namespace Bus
+  {
+    class Connection;
+    namespace Type
+    {
+      template< typename T >
+      class Wrapper;
+    }
+
+    namespace Object
+    {
+
+      class Base : public Task
+      {
+      public:
+
+        const std::string& getPath() const;
+
+        void setPath(const std::string& path);
+
+        virtual const char *getHost() const = 0;
+
+        virtual void start(bool) = 0;
+
+        virtual void stop() = 0;
+
+        virtual void introspect(std::string& def) const = 0;
+
+      protected:
+        Base();
+        Base(const std::string& path);
+        virtual ~Base();
+
+        virtual void entry()
+        {
+        }
+
+        virtual void save()
+        {
+        }
+
+        virtual void restore()
+        {
+        }
+
+        Shared::Pointer< Connection > connection;
+        std::string path;
+        friend class Overkiz::Bus::Connection;
+
+        template< typename T > friend class Overkiz::Bus::Type::Wrapper;
+        template< typename T > friend class Shared::Pointer;
+      };
+
+      class ReturnHandler : public Overkiz::Task
+      {
+      public:
+
+        ReturnHandler();
+
+        virtual ~ReturnHandler();
+
+        virtual void sendReturn(const uint32_t serial, const Shared::Pointer< Message::Method::Return > & ret) = 0;
+
+      private:
+
+        void entry();
+
+        uint32_t serial;
+        Shared::Pointer< Message::Method::Return > ret;
+
+        friend class Overkiz::Bus::Connection;
+        template< typename T > friend class Shared::Pointer;
+      };
+
+      class Proxy : public Base
+      {
+      public:
+        Proxy();
+        Proxy(const std::string& path, const char *dest);
+
+        virtual ~Proxy();
+
+        const char *getHost() const;
+
+        void setHost(const char *dest);
+
+        Message::SendReturn send(Message::Method::Call& method) const;
+
+        uint32_t send(Message::Method::Call& method, const Shared::Pointer< ReturnHandler > & handler) const;
+
+        virtual void signal(const Message::Signal& signal);
+
+        void start(bool system = @SYSTEM_BUS@);
+
+        void stop();
+
+        void introspect(std::string& def) const;
+
+        uint32_t introspect(const Shared::Pointer< ReturnHandler > & handler) const;
+
+      private:
+
+        void entry();
+
+        std::string host;
+        std::list< Message::Signal > signals;
+
+        friend class Overkiz::Bus::Connection;
+        template< typename T > friend class Shared::Pointer;
+        template< typename T > friend class Overkiz::Bus::Type::Wrapper;
+      };
+
+      class Server : public Base
+      {
+      public:
+        Server();
+
+        Server(const std::string& path);
+
+        virtual ~Server();
+
+        const char *getHost() const;
+
+        void send(Message::Method::Return& method) const;
+
+        void send(Message::Signal& signal) const;
+
+        virtual bool method(const Message::Method::Call& method);
+
+        virtual void introspect(std::string& def) const;
+
+        void start(bool system = @SYSTEM_BUS@);
+
+        void stop();
+
+      private:
+
+        void entry();
+
+        std::list< Message::Method::Call > calls;
+
+        friend class Overkiz::Bus::Connection;
+        template< typename T > friend class Shared::Pointer;
+      };
+    }
+  }
+}
+
+#endif /* BUSOBJECT_H_ */
