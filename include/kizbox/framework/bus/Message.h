@@ -95,7 +95,7 @@ namespace Overkiz
             matchedSignatures.push_back(matchSignature);
           }
 
-          MismatchSignature(const std::initializer_list< std::string > matchedSignatures = std::initializer_list< std::string >()) :
+          MismatchSignature(const std::initializer_list< std::string > & matchedSignatures = std::initializer_list< std::string >()) :
             matchedSignatures(matchedSignatures)
           {
           }
@@ -135,7 +135,7 @@ namespace Overkiz
             desiredTypes.push_back(desiredType);
           }
 
-          MismatchType(int type, const std::initializer_list< int > desiredTypes = std::initializer_list< int >()) :
+          MismatchType(int type, const std::initializer_list< int > & desiredTypes = std::initializer_list< int >()) :
             type(type),
             desiredTypes(desiredTypes)
           {

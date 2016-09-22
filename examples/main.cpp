@@ -11,35 +11,41 @@
 #include <kizbox/framework/bus/Type.h>
 
 
-class Foo: public Overkiz::Event {
+class Foo: public Overkiz::Event
+{
 public:
-  Foo() {
-
+  Foo()
+  {
   }
 
-  virtual ~Foo() {
+  virtual ~Foo()
+  {
   }
 
 private:
-  void receive(uint64_t numberOfEvents) {
+  void receive(uint64_t numberOfEvents)
+  {
     printf("Event received ! \n");
   }
 
 };
 
-class Bar: public Overkiz::Timer::Monotonic {
+class Bar: public Overkiz::Timer::Monotonic
+{
 public:
   Bar() :
-    _myFoo() {
+    _myFoo()
+  {
     setStackSize(4 * getpagesize());
   }
 
-  virtual ~Bar() {
-
+  virtual ~Bar()
+  {
   }
 
 private:
-  void expired(const Overkiz::Time::Monotonic& time) {
+  void expired(const Overkiz::Time::Monotonic& time)
+  {
     OVK_NOTICE("Expired !");
     _myFoo.send();
     exit(EXIT_SUCCESS);
@@ -48,19 +54,23 @@ private:
   Foo _myFoo;
 };
 
-class Server: public Overkiz::Bus::Object::Server {
+class Server: public Overkiz::Bus::Object::Server
+{
 public:
   Server(const std::string& path) :
-    Overkiz::Bus::Object::Server(path) {
+    Overkiz::Bus::Object::Server(path)
+  {
     Overkiz::Bus::Connection::get()->bind("com.overkiz.Application.Hellow.Server");
   }
 
-  bool method (const Overkiz::Bus::Message::Method::Call& call)
+  bool method(const Overkiz::Bus::Message::Method::Call& call)
   {
     std::string message = "";
     OVK_NOTICE("Method Call received !");
     Overkiz::Bus::Type::Wrapper< std::string > stringWrapper;
-    if (strcmp(call.getInterface(),"com.overkiz.Application.Hellow.Server")==0) {
+
+    if(strcmp(call.getInterface(),"com.overkiz.Application.Hellow.Server")==0)
+    {
       char interface[] = "com.overkiz.Application.Hellow.Proxy";
       char path[] = "/com/overkiz/Application/Hellow/Proxy";
       OVK_NOTICE("Interface checked !");
@@ -72,7 +82,9 @@ public:
       Overkiz::Bus::Message::Iterator methodIt = signal.begin();
       stringWrapper.serialize(methodIt, ret);
       Overkiz::Bus::Object::Server::send(signal);
-      if((strcmp(call.getMember(),"Test")==0)&&(strcmp(call.getSignature(),"s")==0)) {
+
+      if((strcmp(call.getMember(),"Test")==0)&&(strcmp(call.getSignature(),"s")==0))
+      {
         OVK_NOTICE("Member checked !");
         Overkiz::Bus::Message::ConstIterator callIt = call.begin();
         stringWrapper.deserialize(callIt, message);
@@ -85,25 +97,28 @@ public:
         return true;
       }
     }
+
     return false;
   }
 
-  virtual ~Server() {
-
+  virtual ~Server()
+  {
   }
 
 
 };
 
-class Proxy: public Overkiz::Bus::Object::Proxy {
+class Proxy: public Overkiz::Bus::Object::Proxy
+{
 public:
 
-  Proxy (const std::string& newPath, const char *newHost)
-{
+  Proxy(const std::string& newPath, const char *newHost)
+  {
     this->setPath(newPath);
     this->setHost(newHost);
-}
-  void signal (const Overkiz::Bus::Message::Signal& signal) {
+  }
+  void signal(const Overkiz::Bus::Message::Signal& signal)
+  {
     Overkiz::Bus::Type::Wrapper< std::string > stringWrapper;
     std::string message = "";
     OVK_NOTICE("Signal received !");
@@ -113,8 +128,10 @@ public:
   }
 };
 
-class ReturnHandler: public Overkiz::Bus::Object::ReturnHandler {
-  void sendReturn (const uint32_t serial, const Overkiz::Shared::Pointer<Overkiz::Bus::Message::Method::Return> & ret) {
+class ReturnHandler: public Overkiz::Bus::Object::ReturnHandler
+{
+  void sendReturn(const uint32_t serial, const Overkiz::Shared::Pointer<Overkiz::Bus::Message::Method::Return> & ret)
+  {
     const Overkiz::Bus::Message::Method::Return constRet = *ret;
     Overkiz::Bus::Type::Wrapper< std::string > stringWrapper;
     OVK_NOTICE("Return Handler !");
@@ -128,8 +145,8 @@ class ReturnHandler: public Overkiz::Bus::Object::ReturnHandler {
 };
 
 
-int main(int argc, char * argv[]) {
-
+int main(int argc, char * argv[])
+{
   Overkiz::Shared::Pointer<Overkiz::Poller> & poller = Overkiz::Poller::get(false);
   char member[] = "Test";
   char interface[] = "com.overkiz.Application.Hellow.Server";
@@ -141,11 +158,14 @@ int main(int argc, char * argv[]) {
   Overkiz::Shared::Pointer<ReturnHandler> retHandlPoint;
   Server * myServer;
 
-  if(strcmp(argv[1], "server")==0) {
+  if(strcmp(argv[1], "server")==0)
+  {
     OVK_NOTICE("Server");
     myServer = new Server(path);
     myServer->start();
-  } else if (strcmp(argv[1], "proxy")==0) {
+  }
+  else if(strcmp(argv[1], "proxy")==0)
+  {
     OVK_NOTICE("Proxy");
     myProxy = new Proxy(path, interface);
     retHandlPoint = Overkiz::Shared::Pointer<ReturnHandler>::create();
@@ -157,6 +177,7 @@ int main(int argc, char * argv[]) {
     myProxy->start();
     myProxy->send(call, retHandlPoint);
   }
+
   OVK_NOTICE("Polling");
   poller->loop();
   //Warning nothing will be executed here

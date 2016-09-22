@@ -377,7 +377,6 @@ namespace Overkiz
 
         virtual void serialize(Message::Iterator& iterator, const Container<Type, Compare, Allocator>& val) const
         {
-          bool ret;
           TypeWrapper<Type> wrapper;
           Message::Iterator iter = iterator.begin(DBUS_TYPE_ARRAY, wrapper.signature().c_str());
 

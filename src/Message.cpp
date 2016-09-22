@@ -9,6 +9,9 @@
 #include "Connection.h"
 #include "Message.h"
 
+#define DBUS_METHOD_RETURN_DEFAULT_TIMEOUT 5
+#define DBUS_METHOD_RETURN_UPPER_TIMEOUT 28
+
 namespace Overkiz
 {
   namespace Bus
@@ -279,9 +282,9 @@ namespace Overkiz
         }
 
         Iterator it;
-        int ret = dbus_message_iter_open_container(&iterator, type, signature, &it.iterator);
+        dbus_bool_t ret = dbus_message_iter_open_container(&iterator, type, signature, &it.iterator);
 
-        if(ret == false)
+        if(ret == FALSE)
         {
           throw;
         }
@@ -302,9 +305,9 @@ namespace Overkiz
         }
 
         Iterator it;
-        int ret = dbus_message_iter_open_container(&iterator, type, NULL, &it.iterator);
+        dbus_bool_t ret = dbus_message_iter_open_container(&iterator, type, NULL, &it.iterator);
 
-        if(ret == false)
+        if(ret == FALSE)
         {
           throw;
         }
@@ -314,9 +317,9 @@ namespace Overkiz
 
       void Iterator::end(Iterator& it)
       {
-        int ret = dbus_message_iter_close_container(&iterator, &it.iterator);
+        dbus_bool_t ret = dbus_message_iter_close_container(&iterator, &it.iterator);
 
-        if(ret == false)
+        if(ret == FALSE)
         {
           throw;
         }
@@ -582,7 +585,7 @@ namespace Overkiz
         Call::Call()
         {
           message = dbus_message_new(DBUS_MESSAGE_TYPE_METHOD_CALL);
-          _timeout = Time::Elapsed(5, 0);
+          _timeout = Time::Elapsed(DBUS_METHOD_RETURN_DEFAULT_TIMEOUT, 0);
         }
 
         Call::Call(const Call& message) :
@@ -602,7 +605,7 @@ namespace Overkiz
             message = NULL;
           }
 
-          _timeout = Time::Elapsed(5, 0);
+          _timeout = Time::Elapsed(DBUS_METHOD_RETURN_DEFAULT_TIMEOUT, 0);
         }
 
         Call::~Call()
@@ -656,9 +659,18 @@ namespace Overkiz
           }
         }
 
+        // Be careful, timeout upper limit is set by dbus global settings !
         void Call::setTimeout(const Time::Elapsed & timeout)
         {
-          _timeout = timeout;
+          if(_timeout.seconds > DBUS_METHOD_RETURN_UPPER_TIMEOUT)
+          {
+            Connection::get()->log(Overkiz::Log::Priority::OVK_WARNING, "Call timeout exeeds upper value.");
+            _timeout = Time::Elapsed(DBUS_METHOD_RETURN_UPPER_TIMEOUT, 0);
+          }
+          else
+          {
+            _timeout = timeout;
+          }
         }
 
         const Time::Elapsed &Call::getTimeout() const

@@ -7,6 +7,10 @@
 #include <dbus/dbus.h>
 #include <kizbox/framework/core/Poller.h>
 #include <kizbox/framework/core/Log.h>
+#include <kizbox/framework/core/Errno.h>
+
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "Connection.h"
 #include "Object.h"
@@ -26,9 +30,11 @@ namespace Overkiz
 
       if(connection == NULL || dbus_error_is_set(&error))
       {
-        OVK_CRITICAL("Error %s: %s", error.name, error.message);
+        OVK_CRITICAL("Connection error '%s' (%s)", error.name, error.message);
         dbus_error_free(&error);
-        throw Overkiz::Bus::Connection::EmptyException();
+        //Because daemon shouldn't run without dbus daemon, stop process.
+        //Same as libbus-1 when dbus daemon drops.
+        exit(EXIT_FAILURE);
       }
 
       dbus_error_free(&error);
@@ -65,8 +71,7 @@ namespace Overkiz
         flags |= DBUS_NAME_FLAG_REPLACE_EXISTING;
       }
 
-      int ret = -1;
-      ret = dbus_bus_request_name(connection, hostname.c_str(), flags, &error);
+      int ret = dbus_bus_request_name(connection, hostname.c_str(), flags, &error);
 
       if(ret == DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER)
       {
@@ -104,8 +109,7 @@ namespace Overkiz
       bool status = false;
       DBusError error;
       dbus_error_init(&error);
-      int ret = -1;
-      ret = dbus_bus_release_name(connection, hostname.c_str(), &error);
+      int ret = dbus_bus_release_name(connection, hostname.c_str(), &error);
 
       if(ret == DBUS_RELEASE_NAME_REPLY_RELEASED)
       {
@@ -171,7 +175,8 @@ namespace Overkiz
         DBusMessage *reply = dbus_connection_send_with_reply_and_block(connection, message.message, message.getTimeout().seconds * 1000, &error);
 
         //It's necessary to throw an exception only if DBUS_ERROR_NO_MEMORY or DBUS_ERROR_DISCONNECTED is set
-        if(!reply && dbus_error_is_set(&error) && memcmp(DBUS_ERROR_NO_REPLY, error.name, sizeof(DBUS_ERROR_NO_REPLY)) != 0)
+        if(!reply && dbus_error_is_set(&error) && (memcmp(DBUS_ERROR_NO_MEMORY, error.name, sizeof(DBUS_ERROR_NO_MEMORY)) == 0
+            || memcmp(DBUS_ERROR_DISCONNECTED, error.name, sizeof(DBUS_ERROR_DISCONNECTED)) == 0))
         {
           log(Overkiz::Log::Priority::OVK_ERROR, "Send error %s: %s", error.name, error.message);
           dbus_error_free(&error);
@@ -444,6 +449,7 @@ namespace Overkiz
         case DBUS_MESSAGE_TYPE_SIGNAL:
         {
           const char * path = dbus_message_get_path(msg);
+          const char * iface = dbus_message_get_interface(msg);
 
           for(auto it = connection->proxies.begin() ; it != connection->proxies.end() ; it++)
           {
@@ -457,6 +463,12 @@ namespace Overkiz
             for(std::list< Object::Proxy * >::iterator j = objs.begin(); j != objs.end(); ++j)
             {
               Object::Proxy *proxy = *j;
+
+              //If proxy dest host is not a unique name, use filtered interface. (to avoid broadcast dispatch)
+              //Warning: if proxy use Unique Dbus name for dest, all signals from base object path are triggered.
+              if(std::string(proxy->getHost()).find(":") == std::string::npos && std::string(iface).find(proxy->getHost()) == std::string::npos)
+                continue;
+
               proxy->signals.push_back(message);
 
               if(proxy->status() == Task::IDLE)
@@ -581,6 +593,12 @@ namespace Overkiz
     dbus_bool_t Connection::BusWatcher::add(DBusWatch *watch, void *data)
     {
       int fd = dup(dbus_watch_get_unix_fd(watch));
+
+      if(fcntl(fd, F_SETFD, FD_CLOEXEC) == -1)
+      {
+        throw Overkiz::Errno::Exception();
+      }
+
       unsigned int flags = dbus_watch_get_flags(watch);
       uint32_t watcherFlags = 0;
 
