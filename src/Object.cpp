@@ -294,6 +294,7 @@ namespace Overkiz
       ReturnHandler::ReturnHandler()
       {
         enable();
+        serial = 0;
       }
 
       ReturnHandler::~ReturnHandler()

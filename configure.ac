@@ -169,7 +169,7 @@ if test "${pkgconfigcheck}" = 'true' ; then
       test -n "${PKGCONFIG_REQUIRES}" && PKGCONFIG_REQUIRES+=", "
       PKGCONFIG_REQUIRES+="com.kizos.libcore >= 1.6"
 
-      CPPFLAGS+="$(pkg-config --cflags-only-other com.kizos.libcore)"
+      CPPFLAGS+=" $(pkg-config --cflags-only-other com.kizos.libcore) "
     ]
     )
 
@@ -182,7 +182,7 @@ if test "${pkgconfigcheck}" = 'true' ; then
       test -n "${PKGCONFIG_REQUIRES}" && PKGCONFIG_REQUIRES+=", "
       PKGCONFIG_REQUIRES+="dbus-1"
 
-      CXXFLAGS+="$(pkg-config --cflags-only-I dbus-1)"
+      CXXFLAGS+=" $(pkg-config --cflags-only-I dbus-1) "
     ]
     )
 fi

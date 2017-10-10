@@ -142,8 +142,10 @@ namespace Overkiz
       message.check();
       Shared::Pointer< Poller > poller = Poller::get();
       Message::Method::Return ret;
+      bool interuptible = Poller::get()->isInterruptible();
+      Poller::Status status = poller->status();
 
-      if(Poller::get()->isInterruptible() && poller->status() != Poller::STOPPED)
+      if(interuptible && status != Poller::STOPPED)
       {
         DBusPendingCall * pendingCall;
 
@@ -170,6 +172,15 @@ namespace Overkiz
       }
       else
       {
+        #ifndef HAVE_RELEASE
+
+        if(status != Poller::STOPPED)
+        {
+          log(Overkiz::Log::Priority::OVK_WARNING, "Send blocking bus call. (%s %s %s)", dbus_message_get_path(message.message), dbus_message_get_interface(message.message),
+              dbus_message_get_member(message.message));
+        }
+
+        #endif
         DBusError error;
         dbus_error_init(&error);
         DBusMessage *reply = dbus_connection_send_with_reply_and_block(connection, message.message, message.getTimeout().seconds * 1000, &error);
@@ -450,11 +461,12 @@ namespace Overkiz
         {
           const char * path = dbus_message_get_path(msg);
           const char * iface = dbus_message_get_interface(msg);
+          const std::string boundedPath = std::string("path='") + path + "'";
 
           for(auto it = connection->proxies.begin() ; it != connection->proxies.end() ; it++)
           {
-            //Check if this filter contains current path
-            if(it->first.find(path) == std::string::npos)
+            //Check if this filter contains exactly the current path ("path='...'"), ending with a "'" at the end
+            if(it->first.find(boundedPath) == std::string::npos)
               continue;
 
             Message::Signal message(msg);
@@ -551,11 +563,21 @@ namespace Overkiz
       handler = watch;
     }
 
-    Connection::BusWatcher::BusWatcher(DBusWatch *watch, int fd, uint32_t flags) :
-      Watcher(fd, flags)
+    Connection::BusWatcher::BusWatcher(DBusWatch *watch, int fds, uint32_t flags) :
+      Watcher()
     {
       setStackSize(2 * 4096);
       handler = watch;
+      //Dup fd to avoid closing dbus fd on watcher destructor
+      fd = dup(fds);
+
+      if(fd == -1)
+        throw Overkiz::Errno::Exception();
+
+      if(fcntl(fd, F_SETFD, FD_CLOEXEC) == -1)
+        throw Overkiz::Errno::Exception();
+
+      events = flags;
     }
 
     Connection::BusWatcher::~BusWatcher()
@@ -592,13 +614,6 @@ namespace Overkiz
 
     dbus_bool_t Connection::BusWatcher::add(DBusWatch *watch, void *data)
     {
-      int fd = dup(dbus_watch_get_unix_fd(watch));
-
-      if(fcntl(fd, F_SETFD, FD_CLOEXEC) == -1)
-      {
-        throw Overkiz::Errno::Exception();
-      }
-
       unsigned int flags = dbus_watch_get_flags(watch);
       uint32_t watcherFlags = 0;
 
@@ -615,7 +630,7 @@ namespace Overkiz
         }
       }
 
-      BusWatcher *watcher = new BusWatcher(watch, fd, watcherFlags);
+      BusWatcher *watcher = new BusWatcher(watch, dbus_watch_get_unix_fd(watch), watcherFlags);
       watcher->setStackSize(4 * 4096);
       dbus_watch_set_data(watch, watcher, NULL);
       watcher->start();

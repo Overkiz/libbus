@@ -352,7 +352,7 @@ namespace Overkiz
           T* valPtr = &val;
           int i = 0;
 
-          for(Message::ConstIterator iter = iterator.begin(); iter != iterator.end(), i < N; ++iter, ++i)
+          for(Message::ConstIterator iter = iterator.begin(); iter != iterator.end() && i < N; ++iter, ++i)
           {
             wrapper.deserialize(iter, valPtr[i]);
           }
